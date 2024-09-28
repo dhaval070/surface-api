@@ -1,0 +1,43 @@
+package main
+
+import "surface-api/dao/model"
+
+type Config struct {
+	DB_DSN string `mapstructure:"dbdsn"`
+	Port   string `mapstructure:"port"`
+}
+
+type SiteLocResult struct {
+	Site             string         `gorm:"column:site;not null" json:"site"`
+	Location         string         `gorm:"column:location" json:"location"`
+	LocationID       int32          `gorm:"column:location_id" json:"location_id"`
+	Address          string         `gorm:"column:address" json:"address"`
+	MatchType        string         `gorm:"column:match_type" json:"match_type"`
+	SurfaceID        int32          `gorm:"column:surface_id;not null" json:"surface_id"`
+	LiveBarnLocation model.Location `gorm:"foreignKey:LocationID"`
+	LinkedSurface    model.Surface  `gorm:"foreignKey:SurfaceID"`
+}
+
+func (*SiteLocResult) TableName() string {
+	return "sites_locations"
+}
+
+type SurfaceResult struct {
+	ID         int32  `gorm:"column:id;primaryKey" json:"id"`
+	LocationID int32  `gorm:"column:location_id;not null" json:"location_id"`
+	Name       string `gorm:"column:name;not null" json:"name"`
+	Sports     string `gorm:"column:sports;not null" json:"sports"`
+
+	Location model.Location `gorm:"foreignKey:LocationID"`
+}
+
+// TableName Surface's table name
+func (*SurfaceResult) TableName() string {
+	return "surfaces"
+}
+
+type SetSurfaceInput struct {
+	Site      string `json:"site"`
+	Location  string `json:"location"`
+	SurfaceID int32  `json:"surface_id"`
+}
