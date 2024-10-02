@@ -171,8 +171,6 @@ func login(c *gin.Context) {
 		return
 	}
 
-	log.Println(req.Password, string(dst))
-
 	if req.Password != string(dst) {
 		c.JSON(http.StatusOK, gin.H{
 			"error": "Invalid username/password",
