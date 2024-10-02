@@ -192,8 +192,17 @@ func AuthMiddleware(c *gin.Context) {
 	if err != nil {
 		log.Println("session error", err)
 	}
-
 	defer s.SessionRelease(c.Writer)
+
+	url := c.Request.URL.String()
+	if url != "/login" && url != "/logout" {
+		if s.Get("username") == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Session expired",
+			})
+			return
+		}
+	}
 	c.Set("sess", s)
 	c.Next()
 }
