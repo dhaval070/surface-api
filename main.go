@@ -1,10 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
 	"log"
 	"net/http"
 	"surface-api/dao/model"
+	"surface-api/models"
 
+	"github.com/astaxie/beego/session"
+	_ "github.com/astaxie/beego/session/mysql"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -13,13 +19,15 @@ import (
 )
 
 var db *gorm.DB
-var cfg Config
+var cfg models.Config
+var sess *session.Manager
 
 func init() {
 	gin.SetMode(gin.ReleaseMode)
 
 	viper.SetConfigFile("config.yaml")
 	viper.SetDefault("port", "8000")
+	viper.SetDefault("mode", "production")
 
 	if err := viper.ReadInConfig(); err != nil {
 		panic(err)
@@ -36,16 +44,37 @@ func init() {
 		panic(err)
 	}
 	log.Println(cfg)
+
+	sess, err = session.NewManager("mysql", &session.ManagerConfig{
+		CookieName:      "gosession",
+		Gclifetime:      3600,
+		ProviderConfig:  cfg.DB_DSN,
+		EnableSetCookie: true,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	go sess.GC()
 }
 
 func main() {
 	r := gin.Default()
-	r.Use(cors.Default())
+
+	if cfg.Mode == "local" {
+		corsCfg := cors.DefaultConfig()
+		corsCfg.AllowCredentials = true
+		corsCfg.AllowOrigins = []string{"http://localhost:5173"}
+		r.Use(cors.New(corsCfg))
+	}
+	r.Use(AuthMiddleware)
 
 	r.GET("/site-locations/:site", getSiteLoc)
 	r.GET("/sites", getSites)
 	r.GET("/surfaces", getSurfaces)
 	r.POST("/set-surface", setSurface)
+	r.POST("/login", login)
+	r.GET("/logout", logout)
+	r.GET("/session", checkSession)
 
 	if err := r.Run(":" + cfg.Port); err != nil {
 		panic(err)
@@ -53,7 +82,7 @@ func main() {
 }
 
 func setSurface(c *gin.Context) {
-	var input = &SiteLocResult{}
+	var input = &models.SiteLocResult{}
 
 	if err := c.BindJSON(input); err != nil {
 		sendError(c, err)
@@ -72,7 +101,7 @@ func setSurface(c *gin.Context) {
 		sendError(c, err)
 		return
 	}
-	var result = []SiteLocResult{}
+	var result = []models.SiteLocResult{}
 
 	if err := db.Joins("LinkedSurface").Joins("LiveBarnLocation").Find(&result, "site=?", input.Site).Error; err != nil {
 		sendError(c, err)
@@ -82,7 +111,7 @@ func setSurface(c *gin.Context) {
 }
 
 func getSurfaces(c *gin.Context) {
-	var surfaces = []SurfaceResult{}
+	var surfaces = []models.SurfaceResult{}
 
 	if err := db.Joins("Location").Find(&surfaces).Error; err != nil {
 		sendError(c, err)
@@ -102,7 +131,7 @@ func getSites(c *gin.Context) {
 
 func getSiteLoc(c *gin.Context) {
 	site := c.Param("site")
-	var result = []SiteLocResult{}
+	var result = []models.SiteLocResult{}
 
 	if err := db.Joins("LinkedSurface").Joins("LiveBarnLocation").Find(&result, "site=?", site).Error; err != nil {
 		sendError(c, err)
@@ -115,4 +144,73 @@ func sendError(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, gin.H{
 		"error": err.Error(),
 	})
+}
+
+func login(c *gin.Context) {
+	var req = &models.Login{}
+
+	if err := c.BindJSON(req); err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	hash := sha256.Sum256([]byte(req.Password))
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(hash)))
+	base64.StdEncoding.Encode(dst, hash[:])
+
+	if err := db.First(req, "username=?", req.Username).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusOK, gin.H{
+				"error": "Invalid username/password",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	log.Println(req.Password, string(dst))
+
+	if req.Password != string(dst) {
+		c.JSON(http.StatusOK, gin.H{
+			"error": "Invalid username/password",
+		})
+		return
+	}
+
+	s, _ := c.Get("sess")
+	sess := s.(session.Store)
+	sess.Set("username", req.Username)
+
+	c.JSON(http.StatusOK, gin.H{
+		"username": req.Username,
+	})
+}
+
+func AuthMiddleware(c *gin.Context) {
+	s, err := sess.SessionStart(c.Writer, c.Request)
+	if err != nil {
+		log.Println("session error", err)
+	}
+
+	defer s.SessionRelease(c.Writer)
+	c.Set("sess", s)
+	c.Next()
+}
+
+func checkSession(c *gin.Context) {
+	s, _ := c.Get("sess")
+	sess := s.(session.Store)
+	username := sess.Get("username")
+
+	c.JSON(http.StatusOK, gin.H{
+		"username": username,
+	})
+}
+
+func logout(c *gin.Context) {
+	sess.SessionDestroy(c.Writer, c.Request)
+	c.Status(http.StatusOK)
 }

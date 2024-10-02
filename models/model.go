@@ -1,10 +1,11 @@
-package main
+package models
 
 import "surface-api/dao/model"
 
 type Config struct {
 	DB_DSN string `mapstructure:"dbdsn"`
 	Port   string `mapstructure:"port"`
+	Mode   string `mapstructure:"mode"`
 }
 
 type SiteLocResult struct {
@@ -40,4 +41,13 @@ type SetSurfaceInput struct {
 	Site      string `json:"site"`
 	Location  string `json:"location"`
 	SurfaceID int32  `json:"surface_id"`
+}
+
+type Login struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (Login) TableName() string {
+	return "users"
 }
