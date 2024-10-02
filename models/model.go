@@ -3,7 +3,7 @@ package models
 import "surface-api/dao/model"
 
 type Config struct {
-	DB_DSN string `mapstructure:"dbdsn"`
+	DB_DSN string `mapstructure:"DB_DSN"`
 	Port   string `mapstructure:"port"`
 	Mode   string `mapstructure:"mode"`
 }
