@@ -113,7 +113,7 @@ func setSurface(c *gin.Context) {
 func getSurfaces(c *gin.Context) {
 	var surfaces = []models.SurfaceResult{}
 
-	if err := db.Joins("Location").Find(&surfaces).Error; err != nil {
+	if err := db.Order("Location.Name,name").Joins("Location").Find(&surfaces).Error; err != nil {
 		sendError(c, err)
 	}
 	c.JSON(http.StatusOK, surfaces)
