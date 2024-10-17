@@ -23,6 +23,13 @@ func (*SiteLocResult) TableName() string {
 	return "sites_locations"
 }
 
+type Mapping struct {
+	Site        string `json:"site" gorm:"column:site"`
+	Location    string `json:"location" gorm:"column:location"`
+	SurfaceID   int    `json:"surface_id" gorm:"column:surface_id"`
+	SurfaceName string `gorm:"foreignKey:SurfaceID" gorm:"column:surface_name" json:"surface_name"`
+}
+
 type SurfaceResult struct {
 	ID         int32  `gorm:"column:id;primaryKey" json:"id"`
 	LocationID int32  `gorm:"column:location_id;not null" json:"location_id"`

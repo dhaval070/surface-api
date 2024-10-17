@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"surface-api/dao/model"
@@ -73,9 +74,11 @@ func main() {
 	r.Use(AuthMiddleware)
 
 	r.GET("/site-locations/:site", getSiteLoc)
+	r.GET("/mappings/:site", getMappings)
 	r.GET("/sites", getSites)
 	r.GET("/surfaces", getSurfaces)
 	r.POST("/set-surface", setSurface)
+	r.POST("/set-mapping", setMapping)
 	r.POST("/login", login)
 	r.GET("/logout", logout)
 	r.GET("/session", checkSession)
@@ -166,6 +169,29 @@ func setSurface(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func setMapping(c *gin.Context) {
+	var input = &models.Mapping{}
+
+	if err := c.BindJSON(input); err != nil {
+		sendError(c, err)
+		return
+	}
+
+	var table = input.Site + "_mappings"
+	var surface = &model.Surface{}
+	if err := db.Find(surface, input.SurfaceID).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+
+	if err := db.Exec(fmt.Sprintf(`update %s set surface_id=? where location=?`, table), input.SurfaceID, input.Location).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+	c.AddParam("site", input.Site)
+	getMappings(c)
+}
+
 func getSurfaces(c *gin.Context) {
 	var surfaces = []models.SurfaceResult{}
 
@@ -190,6 +216,27 @@ func getSiteLoc(c *gin.Context) {
 	var result = []models.SiteLocResult{}
 
 	if err := db.Joins("LinkedSurface").Joins("LiveBarnLocation").Find(&result, "site=?", site).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func getMappings(c *gin.Context) {
+	site := c.Param("site")
+	var table = site + "_mappings"
+	var result = []models.Mapping{}
+
+	err := db.Raw(fmt.Sprintf(`SELECT
+		"%s" as site,
+		%s.location,
+		%s.surface_id,
+		surfaces.name as surface_name
+		FROM %s
+		LEFT JOIN surfaces ON %s.surface_id = surfaces.id`,
+		site, table, table, table, table)).Scan(&result).Error
+
+	if err != nil {
 		sendError(c, err)
 		return
 	}
