@@ -83,6 +83,8 @@ func main() {
 	r.GET("/logout", logout)
 	r.GET("/session", checkSession)
 	r.GET("/report", downloadReport)
+	r.GET("/ramp-mappings", rampMappings)
+	r.POST("/set-ramp-mapping", SetRampMappings)
 
 	if err := r.Run(":" + cfg.Port); err != nil {
 		panic(err)
@@ -323,4 +325,45 @@ func checkSession(c *gin.Context) {
 func logout(c *gin.Context) {
 	sess.SessionDestroy(c.Writer, c.Request)
 	c.Status(http.StatusOK)
+}
+
+func rampMappings(c *gin.Context) {
+	var result []models.RampLocation
+
+	err := db.Raw(`SELECT
+		a.rarid,
+		a.name, a.abbr, a.address, a.city, a.prov, a.pcode, a.country, a.match_type,
+		c.name location, a.surface_id,
+		b.name surface_name
+		FROM RAMP_Locations a LEFT JOIN surfaces b ON a.surface_id = b.id
+		LEFT JOIN locations c ON c.id = a.location_id`).Scan(&result).Error
+
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func SetRampMappings(c *gin.Context) {
+	var input = &models.SetRampSurfaceID{}
+
+	if err := c.BindJSON(input); err != nil {
+		sendError(c, err)
+		return
+	}
+
+	var rec = &models.RampLocation{}
+
+	if err := db.First(rec, "rarid=?", input.RarID).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+
+	if err := db.Exec(`UPDATE RAMP_Locations SET surface_id=? where rarid=?`, input.SurfaceID, input.RarID).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+
+	rampMappings(c)
 }

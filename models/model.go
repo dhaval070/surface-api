@@ -58,3 +58,27 @@ type Login struct {
 func (Login) TableName() string {
 	return "users"
 }
+
+type RampLocation struct {
+	Rarid       int    `json:"rar_id" gorm:"primaryKey"`
+	Name        string `json:"name"`
+	Abbr        string `json:"abbr"`
+	Address     string `json:"address"`
+	City        string `json:"city"`
+	Prov        string `json:"prov"`
+	Pcode       string `json:"pcode"`
+	Country     string `json:"country"`
+	MatchType   string `json:"match_type"`
+	Location    string `json:"location"`
+	SurfaceID   int    `json:"surface_id"`
+	SurfaceName string `json:"surface_name"`
+}
+
+func (RampLocation) TableName() string {
+	return "RAMP_Locations"
+}
+
+type SetRampSurfaceID struct {
+	RarID     int `json:"rar_id" binding:"required"`
+	SurfaceID int `json:"surface_id"`
+}
