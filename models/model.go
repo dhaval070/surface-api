@@ -31,12 +31,13 @@ type Mapping struct {
 }
 
 type SurfaceResult struct {
-	ID         int32  `gorm:"column:id;primaryKey" json:"id"`
-	LocationID int32  `gorm:"column:location_id;not null" json:"location_id"`
-	Name       string `gorm:"column:name;not null" json:"name"`
-	Sports     string `gorm:"column:sports;not null" json:"sports"`
-
-	Location model.Location `gorm:"foreignKey:LocationID"`
+	ID              int32  `gorm:"column:id;primaryKey" json:"id"`
+	LocationID      int32  `gorm:"column:location_id;not null" json:"location_id"`
+	Name            string `gorm:"column:name;not null" json:"name"`
+	Sports          string `gorm:"column:sports;not null" json:"sports"`
+	LocationName    string `json:"location_name"`
+	LocationCity    string `json:"location_city"`
+	LocationAddress string `json:"location_address"`
 }
 
 // TableName Surface's table name
@@ -60,18 +61,15 @@ func (Login) TableName() string {
 }
 
 type RampLocation struct {
-	Rarid       int    `json:"rar_id" gorm:"primaryKey"`
-	Name        string `json:"name"`
-	Abbr        string `json:"abbr"`
-	Address     string `json:"address"`
-	City        string `json:"city"`
-	Prov        string `json:"prov"`
-	Pcode       string `json:"pcode"`
-	Country     string `json:"country"`
-	MatchType   string `json:"match_type"`
-	Location    string `json:"location"`
-	SurfaceID   int    `json:"surface_id"`
-	SurfaceName string `json:"surface_name"`
+	Rarid        int    `json:"rar_id" gorm:"primaryKey"`
+	Location     string `json:"location"`
+	Address      string `json:"address"`
+	City         string `json:"city"`
+	ProvinceName string `json:"province_name"`
+	Country      string `json:"country"`
+	MatchType    string `json:"match_type"`
+	SurfaceID    int    `json:"surface_id"`
+	SurfaceName  string `json:"surface_name"`
 }
 
 func (RampLocation) TableName() string {
@@ -79,6 +77,7 @@ func (RampLocation) TableName() string {
 }
 
 type SetRampSurfaceID struct {
-	RarID     int `json:"rar_id" binding:"required"`
-	SurfaceID int `json:"surface_id"`
+	RarID     int    `json:"rar_id" binding:"required"`
+	SurfaceID int    `json:"surface_id"`
+	Province  string `json:"province"`
 }

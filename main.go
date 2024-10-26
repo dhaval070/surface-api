@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -50,6 +51,8 @@ func init() {
 	}
 	log.Println(cfg)
 
+	db.Raw(`SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))`)
+
 	sess, err = session.NewManager("mysql", &session.ManagerConfig{
 		CookieName:      "gosession",
 		Gclifetime:      3600,
@@ -83,7 +86,8 @@ func main() {
 	r.GET("/logout", logout)
 	r.GET("/session", checkSession)
 	r.GET("/report", downloadReport)
-	r.GET("/ramp-mappings", rampMappings)
+	r.GET("/ramp-mappings/:province", rampMappings)
+	r.GET("/ramp-provinces", rampProvinces)
 	r.POST("/set-ramp-mapping", SetRampMappings)
 
 	if err := r.Run(":" + cfg.Port); err != nil {
@@ -101,7 +105,7 @@ func downloadReport(c *gin.Context) {
 					date_format(max( date_add(e.datetime, INTERVAL 90 minute)), "%Y-%m-%d %T") end_time
 				FROM
 				events e JOIN surfaces s on e.surface_id=s.id JOIN locations l on l.id=s.location_id
-				GROUP BY l.name, s.name, e.surface_id,  e.datetime
+				GROUP BY l.name, s.name, e.surface_id, dow
 				ORDER BY location_name, surface_name, surface_id,dayofweek(e.datetime) `
 
 	dbh, err := db.DB()
@@ -196,8 +200,25 @@ func setMapping(c *gin.Context) {
 
 func getSurfaces(c *gin.Context) {
 	var surfaces = []models.SurfaceResult{}
+	province := c.Query("province")
 
-	if err := db.Order("Location.Name,name").Joins("Location").Find(&surfaces).Error; err != nil {
+	var err error
+
+	err = db.Raw(`SELECT
+			a.id,
+			a.location_id,
+			a.name,
+			a.sports,
+			l.name location_name,
+			l.city location_city,
+			l.address1 location_address
+		FROM
+			surfaces a
+		INNER JOIN locations l ON a.location_id = l.id
+		INNER JOIN provinces p ON l.province_id = p.id
+		WHERE p.province_name = ?`, province).Scan(&surfaces).Error
+
+	if err != nil {
 		sendError(c, err)
 	}
 	c.JSON(http.StatusOK, surfaces)
@@ -328,21 +349,42 @@ func logout(c *gin.Context) {
 }
 
 func rampMappings(c *gin.Context) {
+	var province = c.Param("province")
 	var result []models.RampLocation
 
 	err := db.Raw(`SELECT
 		a.rarid,
-		a.name, a.abbr, a.address, a.city, a.prov, a.pcode, a.country, a.match_type,
-		c.name location, a.surface_id,
+		a.name location, a.address, a.city, a.province_name, a.country, a.match_type,
+		a.surface_id,
 		b.name surface_name
-		FROM RAMP_Locations a LEFT JOIN surfaces b ON a.surface_id = b.id
-		LEFT JOIN locations c ON c.id = a.location_id`).Scan(&result).Error
+		FROM RAMP_Locations a
+		LEFT JOIN locations c ON c.id = a.location_id
+		LEFT JOIN surfaces b ON b.id = a.surface_id
+		WHERE a.province_name=?`, province).Scan(&result).Error
 
 	if err != nil {
 		sendError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+func rampProvinces(c *gin.Context) {
+	var result []sql.NullString
+
+	err := db.Raw("select distinct(province_name) provinces from RAMP_Locations order by provinces").Scan(&result).Error
+
+	if err != nil {
+		sendError(c, err)
+		return
+	}
+	var data []string
+	for _, v := range result {
+		if v.Valid {
+			data = append(data, v.String)
+		}
+	}
+	c.JSON(http.StatusOK, data)
 }
 
 func SetRampMappings(c *gin.Context) {
@@ -365,5 +407,6 @@ func SetRampMappings(c *gin.Context) {
 		return
 	}
 
+	c.AddParam("province", input.Province)
 	rampMappings(c)
 }
