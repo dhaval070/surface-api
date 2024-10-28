@@ -216,7 +216,7 @@ func getSurfaces(c *gin.Context) {
 			surfaces a
 		INNER JOIN locations l ON a.location_id = l.id
 		INNER JOIN provinces p ON l.province_id = p.id
-		WHERE p.province_name = ?`, province).Scan(&surfaces).Error
+		WHERE p.province_name = ? ORDER BY l.name`, province).Scan(&surfaces).Error
 
 	if err != nil {
 		sendError(c, err)
