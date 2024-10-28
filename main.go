@@ -51,7 +51,7 @@ func init() {
 	}
 	log.Println(cfg)
 
-	db.Raw(`SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))`)
+	db.Exec(`SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))`)
 
 	sess, err = session.NewManager("mysql", &session.ManagerConfig{
 		CookieName:      "gosession",
