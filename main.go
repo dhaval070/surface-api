@@ -102,10 +102,10 @@ func downloadReport(c *gin.Context) {
 					s.name surface_name,
 					date_format(e.datetime, "%W") dow,
 					date_format(min(e.datetime), "%Y-%m-%d %T") start_time,
-					date_format(max( date_add(e.datetime, INTERVAL 90 minute)), "%Y-%m-%d %T") end_time
+					date_format(max( date_add(e.datetime, INTERVAL 150 minute)), "%Y-%m-%d %T") end_time
 				FROM
 				events e JOIN surfaces s on e.surface_id=s.id JOIN locations l on l.id=s.location_id
-				GROUP BY l.name, s.name, e.surface_id, dow
+				GROUP BY l.name, s.name, e.surface_id, date(e.datetime)
 				ORDER BY location_name, surface_name, surface_id,dayofweek(e.datetime) `
 
 	dbh, err := db.DB()
