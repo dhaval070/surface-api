@@ -5,19 +5,27 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
-	"errors"
 	"fmt"
-	"log"
 	"net/http"
+	"os"
 	"surface-api/dao/model"
 	"surface-api/models"
+	"time"
+
+	"github.com/pkg/errors"
 
 	"encoding/csv"
 
 	"github.com/astaxie/beego/session"
 	_ "github.com/astaxie/beego/session/mysql"
+	"github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
+	sentryzerolog "github.com/getsentry/sentry-go/zerolog"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	zerologpkgerrors "github.com/rs/zerolog/pkgerrors"
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -26,6 +34,9 @@ import (
 var db *gorm.DB
 var cfg models.Config
 var sess *session.Manager
+var repo *Repository
+
+const SENTRY_DSN = "https://543b57b24251d228f092123dfd67ac0e@o4508621742997504.ingest.us.sentry.io/4508621745946624"
 
 func init() {
 	gin.SetMode(gin.ReleaseMode)
@@ -49,9 +60,12 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	log.Println(cfg)
 
 	db.Exec(`SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))`)
+
+	repo = &Repository{
+		DB: db,
+	}
 
 	sess, err = session.NewManager("mysql", &session.ManagerConfig{
 		CookieName:      "gosession",
@@ -60,9 +74,19 @@ func init() {
 		EnableSetCookie: true,
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("")
 	}
 	go sess.GC()
+
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn:              SENTRY_DSN,
+		EnableTracing:    true,
+		TracesSampleRate: 1.0,
+		Environment:      "development",
+		Debug:            true,
+	}); err != nil {
+		log.Fatal().Err(err).Msg("")
+	}
 }
 
 func main() {
@@ -74,6 +98,33 @@ func main() {
 		corsCfg.AllowOrigins = []string{"http://localhost:5173"}
 		r.Use(cors.New(corsCfg))
 	}
+	r.Use(sentrygin.New(sentrygin.Options{}))
+	zerolog.ErrorStackMarshaler = zerologpkgerrors.MarshalStack
+
+	sentryWriter, err := sentryzerolog.New(sentryzerolog.Config{
+		ClientOptions: sentry.ClientOptions{
+			Dsn: SENTRY_DSN,
+		},
+		Options: sentryzerolog.Options{
+			Levels: []zerolog.Level{
+				zerolog.ErrorLevel,
+				zerolog.FatalLevel,
+				zerolog.PanicLevel,
+				zerolog.InfoLevel,
+			},
+			WithBreadcrumbs: true,
+		},
+	})
+	defer sentryWriter.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	defer sentry.Flush(2 * time.Second)
+	defer sentryWriter.Close()
+
+	log.Logger = log.Output(zerolog.MultiLevelWriter(sentryWriter, os.Stdout))
+
 	r.Use(AuthMiddleware)
 
 	r.GET("/site-locations/:site", getSiteLoc)
@@ -246,19 +297,20 @@ func getSiteLoc(c *gin.Context) {
 }
 
 func getMappings(c *gin.Context) {
+	tr := sentry.TransactionFromContext(c.Request.Context())
+
+	sp := sentry.StartSpan(tr.Context(), "handler.getMappings")
+	defer sp.Finish()
+
 	site := c.Param("site")
-	var table = site + "_mappings"
-	var result = []models.Mapping{}
+	sp.Tags = map[string]string{
+		"site": site,
+	}
+	sp.Data = map[string]any{
+		"site": site,
+	}
 
-	err := db.Raw(fmt.Sprintf(`SELECT
-		"%s" as site,
-		%s.location,
-		%s.surface_id,
-		surfaces.name as surface_name
-		FROM %s
-		LEFT JOIN surfaces ON %s.surface_id = surfaces.id`,
-		site, table, table, table, table)).Scan(&result).Error
-
+	result, err := repo.GetMappings(sp.Context(), site)
 	if err != nil {
 		sendError(c, err)
 		return
@@ -267,6 +319,11 @@ func getMappings(c *gin.Context) {
 }
 
 func sendError(c *gin.Context, err error) {
+	// sentry.CaptureException(err)
+
+	// get gin context to include tracing information
+	log.Error().Stack().Err(err).Msg("")
+
 	c.JSON(http.StatusInternalServerError, gin.H{
 		"error": err.Error(),
 	})
@@ -316,7 +373,7 @@ func login(c *gin.Context) {
 func AuthMiddleware(c *gin.Context) {
 	s, err := sess.SessionStart(c.Writer, c.Request)
 	if err != nil {
-		log.Println("session error", err)
+		log.Fatal().AnErr("session error", err)
 	}
 	defer s.SessionRelease(c.Writer)
 
@@ -327,6 +384,10 @@ func AuthMiddleware(c *gin.Context) {
 				"error": "Session expired",
 			})
 			return
+		} else {
+			sentry.ConfigureScope(func(scope *sentry.Scope) {
+				scope.SetUser(sentry.User{Username: s.Get("username").(string)})
+			})
 		}
 	}
 	c.Set("sess", s)
