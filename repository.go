@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"surface-api/models"
 
 	"github.com/getsentry/sentry-go"
@@ -32,6 +33,7 @@ func (r *Repository) GetMappings(ctx context.Context, site string) ([]models.Map
 		LEFT JOIN surfaces ON %s.surface_id = surfaces.id`,
 		site, table, table, table, table)).Scan(&result).Error
 
+	slog.Debug("in repo", slog.Int("number", 110), slog.String("name", "holla"))
 	if err != nil {
 		return result, errors.Wrap(err, "failed to get mappings")
 	}

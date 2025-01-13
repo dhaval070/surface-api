@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"surface-api/dao/model"
@@ -20,12 +21,10 @@ import (
 	_ "github.com/astaxie/beego/session/mysql"
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
-	sentryzerolog "github.com/getsentry/sentry-go/zerolog"
+	sentryslog "github.com/getsentry/sentry-go/slog"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	zerologpkgerrors "github.com/rs/zerolog/pkgerrors"
+	slogmulti "github.com/samber/slog-multi"
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -74,7 +73,8 @@ func init() {
 		EnableSetCookie: true,
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		slog.Error("error", err)
+		os.Exit(1)
 	}
 	go sess.GC()
 
@@ -83,9 +83,9 @@ func init() {
 		EnableTracing:    true,
 		TracesSampleRate: 1.0,
 		Environment:      "development",
-		Debug:            true,
 	}); err != nil {
-		log.Fatal().Err(err).Msg("")
+		slog.Error("error", err)
+		os.Exit(1)
 	}
 }
 
@@ -99,31 +99,19 @@ func main() {
 		r.Use(cors.New(corsCfg))
 	}
 	r.Use(sentrygin.New(sentrygin.Options{}))
-	zerolog.ErrorStackMarshaler = zerologpkgerrors.MarshalStack
-
-	sentryWriter, err := sentryzerolog.New(sentryzerolog.Config{
-		ClientOptions: sentry.ClientOptions{
-			Dsn: SENTRY_DSN,
-		},
-		Options: sentryzerolog.Options{
-			Levels: []zerolog.Level{
-				zerolog.ErrorLevel,
-				zerolog.FatalLevel,
-				zerolog.PanicLevel,
-				zerolog.InfoLevel,
-			},
-			WithBreadcrumbs: true,
-		},
-	})
-	defer sentryWriter.Close()
-	if err != nil {
-		panic(err)
-	}
 
 	defer sentry.Flush(2 * time.Second)
-	defer sentryWriter.Close()
 
-	log.Logger = log.Output(zerolog.MultiLevelWriter(sentryWriter, os.Stdout))
+	logger := slog.New(slogmulti.Fanout(
+		sentryslog.Option{
+			Level: slog.LevelError,
+		}.NewSentryHandler(),
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}),
+	))
+
+	slog.SetDefault(logger)
 
 	r.Use(AuthMiddleware)
 
@@ -322,7 +310,7 @@ func sendError(c *gin.Context, err error) {
 	// sentry.CaptureException(err)
 
 	// get gin context to include tracing information
-	log.Error().Stack().Err(err).Msg("")
+	slog.Error("caught", slog.Any("error", err))
 
 	c.JSON(http.StatusInternalServerError, gin.H{
 		"error": err.Error(),
@@ -373,7 +361,7 @@ func login(c *gin.Context) {
 func AuthMiddleware(c *gin.Context) {
 	s, err := sess.SessionStart(c.Writer, c.Request)
 	if err != nil {
-		log.Fatal().AnErr("session error", err)
+		slog.Error("session", "error", err)
 	}
 	defer s.SessionRelease(c.Writer)
 
