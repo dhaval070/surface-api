@@ -15,6 +15,7 @@ type SiteLocResult struct {
 	Address          string         `gorm:"column:address" json:"address"`
 	MatchType        string         `gorm:"column:match_type" json:"match_type"`
 	SurfaceID        int32          `gorm:"column:surface_id;not null" json:"surface_id"`
+	Surface          string         `gorm:"column:surface" json:"surface"`
 	LiveBarnLocation model.Location `gorm:"foreignKey:LocationID"`
 	LinkedSurface    model.Surface  `gorm:"foreignKey:SurfaceID"`
 }
