@@ -58,3 +58,53 @@ type SitesConfig struct {
 func (*SitesConfig) TableName() string {
 	return TableNameSitesConfig
 }
+
+// MarshalJSON implements json.Marshaler interface
+func (sc SitesConfig) MarshalJSON() ([]byte, error) {
+	type Alias SitesConfig
+	return json.Marshal(&struct {
+		DisplayName          string  `json:"display_name"`
+		HomeTeam             string  `json:"home_team"`
+		Enabled              *bool   `json:"enabled"`
+		LastScrapedAt        *time.Time `json:"last_scraped_at"`
+		ScrapeFrequencyHours *int32  `json:"scrape_frequency_hours"`
+		Notes                string  `json:"notes"`
+		*Alias
+	}{
+		DisplayName:          nullStringToString(sc.DisplayName),
+		HomeTeam:             nullStringToString(sc.HomeTeam),
+		Enabled:              nullBoolToPtr(sc.Enabled),
+		LastScrapedAt:        nullTimeToPtr(sc.LastScrapedAt),
+		ScrapeFrequencyHours: nullInt32ToPtr(sc.ScrapeFrequencyHours),
+		Notes:                nullStringToString(sc.Notes),
+		Alias:                (*Alias)(&sc),
+	})
+}
+
+func nullStringToString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
+}
+
+func nullBoolToPtr(nb sql.NullBool) *bool {
+	if nb.Valid {
+		return &nb.Bool
+	}
+	return nil
+}
+
+func nullTimeToPtr(nt sql.NullTime) *time.Time {
+	if nt.Valid {
+		return &nt.Time
+	}
+	return nil
+}
+
+func nullInt32ToPtr(ni sql.NullInt32) *int32 {
+	if ni.Valid {
+		return &ni.Int32
+	}
+	return nil
+}

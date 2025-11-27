@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,11 +27,13 @@ import (
 var db *gorm.DB
 var cfg models.Config
 var sess *session.Manager
+var configFile = flag.String("config", "config.yaml", "Path to config file")
 
 func init() {
+	flag.Parse()
 	gin.SetMode(gin.ReleaseMode)
 
-	viper.SetConfigFile("config.yaml")
+	viper.SetConfigFile(*configFile)
 	viper.SetDefault("port", "8000")
 	viper.SetDefault("mode", "production")
 
@@ -92,6 +95,7 @@ func main() {
 
 	// Sites config CRUD routes
 	r.GET("/sites-config", getSitesConfig)
+	r.GET("/parser-types", getParserTypes)
 	r.GET("/sites-config/:id", getSitesConfigByID)
 	r.POST("/sites-config", createSitesConfig)
 	r.PUT("/sites-config/:id", updateSitesConfig)
@@ -232,9 +236,9 @@ func getSurfaces(c *gin.Context) {
 }
 
 func getSites(c *gin.Context) {
-	var sites = []model.Site{}
+	var sites = []model.SitesConfig{}
 
-	if err := db.Find(&sites).Error; err != nil {
+	if err := db.Order("display_name asc").Find(&sites).Error; err != nil {
 		sendError(c, err)
 		return
 	}
@@ -591,4 +595,19 @@ func convertToSitesConfigModel(input models.SitesConfigInput) model.SitesConfig 
 	}
 
 	return sitesConfig
+}
+
+// getParserTypes returns all available parser types
+func getParserTypes(c *gin.Context) {
+	parserTypes := []string{
+		"day_details",
+		"day_details_parser1",
+		"day_details_parser2",
+		"month_based",
+		"group_based",
+		"custom",
+		"external",
+	}
+
+	c.JSON(http.StatusOK, parserTypes)
 }
