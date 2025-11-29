@@ -92,6 +92,7 @@ func main() {
 	r.GET("/ramp-mappings/:province", rampMappings)
 	r.GET("/ramp-provinces", rampProvinces)
 	r.POST("/set-ramp-mapping", SetRampMappings)
+	r.GET("/locations", getLocations)
 
 	// Sites config CRUD routes
 	r.GET("/sites-config", getSitesConfig)
@@ -100,6 +101,8 @@ func main() {
 	r.POST("/sites-config", createSitesConfig)
 	r.PUT("/sites-config/:id", updateSitesConfig)
 	r.DELETE("/sites-config/:id", deleteSitesConfig)
+
+	log.Println("starting server on ", cfg.Port)
 
 	if err := r.Run(":" + cfg.Port); err != nil {
 		panic(err)
@@ -610,4 +613,59 @@ func getParserTypes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, parserTypes)
+}
+
+// LocationWithSurfaces represents a location with its associated surfaces
+type LocationWithSurfaces struct {
+	model.Location
+	Surfaces []model.Surface `json:"surfaces" gorm:"foreignKey:LocationID;references:ID"`
+}
+
+// getLocations returns all locations with their associated surfaces
+func getLocations(c *gin.Context) {
+	page := c.DefaultQuery("page", "1")
+	perPage := c.DefaultQuery("perPage", "10")
+	name := c.Query("name")
+	postalCode := c.Query("postal_code")
+
+	var pageNum, perPageNum int
+	fmt.Sscanf(page, "%d", &pageNum)
+	fmt.Sscanf(perPage, "%d", &perPageNum)
+
+	if pageNum < 1 {
+		pageNum = 1
+	}
+	if perPageNum < 1 || perPageNum > 100 {
+		perPageNum = 10
+	}
+
+	offset := (pageNum - 1) * perPageNum
+
+	baseQuery := db.Model(&model.Location{})
+
+	if name != "" {
+		baseQuery = baseQuery.Where("name LIKE ?", "%"+name+"%")
+	}
+	if postalCode != "" {
+		baseQuery = baseQuery.Where("postal_code LIKE ?", "%"+postalCode+"%")
+	}
+
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+
+	var result []LocationWithSurfaces
+	if err := baseQuery.Preload("Surfaces").Limit(perPageNum).Offset(offset).Find(&result).Error; err != nil {
+		sendError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":    result,
+		"page":    pageNum,
+		"perPage": perPageNum,
+		"total":   total,
+	})
 }
