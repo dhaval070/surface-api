@@ -84,29 +84,29 @@ type SetRampSurfaceID struct {
 }
 
 type SitesConfigInput struct {
-	SiteName             string                 `json:"site_name" binding:"required"`
-	DisplayName          *string                `json:"display_name"`
-	BaseURL              string                 `json:"base_url" binding:"required"`
-	HomeTeam             *string                `json:"home_team"`
-	ParserType           string                 `json:"parser_type" binding:"required"`
-	ParserConfig         map[string]interface{} `json:"parser_config"`
-	Enabled              *bool                  `json:"enabled"`
-	ScrapeFrequencyHours *int32                 `json:"scrape_frequency_hours"`
-	Notes                *string                `json:"notes"`
+	SiteName             string         `json:"site_name" binding:"required"`
+	DisplayName          *string        `json:"display_name"`
+	BaseURL              string         `json:"base_url"`
+	HomeTeam             *string        `json:"home_team"`
+	ParserType           string         `json:"parser_type" binding:"required"`
+	ParserConfig         map[string]any `json:"parser_config"`
+	Enabled              *bool          `json:"enabled"`
+	ScrapeFrequencyHours *int32         `json:"scrape_frequency_hours"`
+	Notes                *string        `json:"notes"`
 }
 
 type SitesConfigResponse struct {
-	ID                   int32                  `json:"id"`
-	SiteName             string                 `json:"site_name"`
-	DisplayName          *string                `json:"display_name"`
-	BaseURL              string                 `json:"base_url"`
-	HomeTeam             *string                `json:"home_team"`
-	ParserType           string                 `json:"parser_type"`
-	ParserConfig         map[string]interface{} `json:"parser_config"`
-	Enabled              *bool                  `json:"enabled"`
-	LastScrapedAt        *string                `json:"last_scraped_at"`
-	ScrapeFrequencyHours *int32                 `json:"scrape_frequency_hours"`
-	Notes                *string                `json:"notes"`
-	CreatedAt            string                 `json:"created_at"`
-	UpdatedAt            string                 `json:"updated_at"`
+	ID                   int32          `json:"id"`
+	SiteName             string         `json:"site_name"`
+	DisplayName          *string        `json:"display_name"`
+	BaseURL              string         `json:"base_url"`
+	HomeTeam             *string        `json:"home_team"`
+	ParserType           string         `json:"parser_type"`
+	ParserConfig         map[string]any `json:"parser_config"`
+	Enabled              *bool          `json:"enabled"`
+	LastScrapedAt        *string        `json:"last_scraped_at"`
+	ScrapeFrequencyHours *int32         `json:"scrape_frequency_hours"`
+	Notes                *string        `json:"notes"`
+	CreatedAt            string         `json:"created_at"`
+	UpdatedAt            string         `json:"updated_at"`
 }
