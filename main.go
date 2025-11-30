@@ -641,7 +641,7 @@ func getLocations(c *gin.Context) {
 
 	offset := (pageNum - 1) * perPageNum
 
-	baseQuery := db.Model(&model.Location{})
+	baseQuery := db.Model(&model.Location{}).Order("locations.name")
 
 	if name != "" {
 		baseQuery = baseQuery.Where("name LIKE ?", "%"+name+"%")
